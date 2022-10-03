@@ -1,4 +1,5 @@
 import argparse
+import email
 import socket
 import sys
 import time
@@ -30,9 +31,12 @@ def main(args):
 
     pluginconfig = configparser.ConfigParser()
     pluginconfig.read(args.configfile)
-    username = pluginconfig.get('NETATMO', 'USERNAME')
+    username = pluginconfig.get('NETATMO', 'USER_EMAIL')
     password = pluginconfig.get('NETATMO', 'PASSWORD')
+    client_id = pluginconfig.get('NETATMO', 'CLIENT_ID')
+    client_secret = pluginconfig.get('NETATMO', 'CLIENT_SECRET')
     enabled = pluginconfig.get('NETATMO', 'ENABLED')
+    device_id=pluginconfig.get('NETATMO', 'DEVICE_ID')
     localtime = pluginconfig.get('NETATMO', 'ENABLED')
     miniservername = pluginconfig.get('NETATMO', 'MINISERVER')
     virtualUDPPort = int(pluginconfig.get('NETATMO', 'UDPPORT'))
@@ -100,98 +104,39 @@ def main(args):
     session.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko'}
 
     """
-    connect to netatmo website and grab a session cookie
+    fetch token with client credentials
     """
-    req = session.get("https://auth.netatmo.com/en-us/access/login")
+    url = "https://api.netatmo.com/oauth2/token"
+    payload = {
+       "client_id" : client_id,
+       "client_secret" : client_secret,
+       "grant_type": "password",
+       "username" : username,
+       "password" : password
+    }
+
+    req = session.post(url, payload,
+     headers={'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, json = payload)
 
     if req.status_code != 200:
-        logging.error("Unable to contact https://auth.netatmo.com/en-us/access/login")
+        logging.error("Unable to contact https://api.netatmo.com/oauth2/token")
         logging.critical("Error: {0}".format(req.status_code))
         sys.exit(-1)
     else:
-        logging.info("Successfully got session cookie from https://auth.netatmo.com/en-us/access/login")
+        logging.info("Successfully got access data from https://api.netatmo.com/oauth2/token")
 
-    """
-    check if we got a valid session cookie
-    """
-    req = session.get("https://auth.netatmo.com/access/csrf")
+    csrf = json.loads(req.text)
+    access_token = csrf["access_token"]
+    # refresh_token = csrf["refresh_token"] not sure if needed
 
-    if req.text.startswith("{\"token\":\"") == False:
-        logging.critical("No _token value found in response from https://auth.netatmo.com/access/csrf")
-        sys.exit(-1)
-    else:
-        csrf = json.loads(req.text)
-        token = csrf["token"]
-        logging.info("Found _token value {0} in response from https://auth.netatmo.com/access/csrf".format(token))
+    header = { "accept": "application/json" , "Authorization" : "Bearer " + access_token}
 
-    """
-    build the payload for authentication
-    """
-    payload = {'email': username,
-               'password': password,
-               '_token': token}
-
-    param = {'next_url': 'https://my.netatmo.com/app/station/'}
-
-    """
-    login and grab an access token
-    """
-    req = session.post("https://auth.netatmo.com/access/postlogin", params=param, data=payload)
-
-    if req.status_code != 200:
-        logging.error("Unable to contact https://auth.netatmo.com/access/postlogin")
-        logging.critical("Error: {0}".format(req.status_code))
-        sys.exit(-1)
-    else:
-        logging.info("Successfully logged in using username {0} and password {1} to https://auth.netatmo.com/access/postlogin".format(username, "xxxxxxxxxx"))
-
-    """
-    check if we got a valid access token
-    """
-    if session.cookies.get("netatmocomaccess_token") is None:
-        logging.critical("No netatmocomaccess_token value found in session cookie - probably wrong username/password")
-        sys.exit(-1)
-    else:
-        logging.info("Found netatmocomaccess_token value {0} in response from https://auth.netatmo.com/access/postlogin".format(session.cookies.get("netatmocomaccess_token")))
-
-    """
-    build the payload for reading data
-    """
-    payload = {'access_token': urllib.parse.unquote(session.cookies.get("netatmocomaccess_token"))}
-
-    """
-    # query device list to get current measurements
-    """
-    req = session.post("https://api.netatmo.com/api/getstationsdata", data=payload)
-
-    if req.status_code != 200:
-        logging.error("Unable to contact https://api.netatmo.com/api/getstationsdata")
-        logging.critical("Status-Code {0} {1}".format(req.status_code, req.text))
-        sys.exit(-1)
-    else:
-        logging.info("Querying queried API  https://api.netatmo.com/api/getstationsdata")
-
-    """
-    check API response has correct format
-    """
-    if req.text.startswith("{\"body\":{\"") == False:
-        logging.error("Response from https://api.netatmo.com/api/getstationsdata has wrong format")
-        logging.critical("Error: {0}".format(req.text))
-        sys.exit(-1)
-    else:
-        logging.info("Successfully queried  queried API  https://api.netatmo.com/api/getstationsdata")
+    req = session.get("https://api.netatmo.com/api/getstationsdata?" + device_id, headers=header)
 
     """
     convert the response into json
     """
     netatmodata = json.loads(req.text)
-
-    """
-    Check if running in apibody
-    """
-    if args.apibody:
-        print(json.dumps(netatmodata, indent=4, sort_keys=True))
-        sys.exit(0)
 
     """
     Loop for each station and module
@@ -362,20 +307,21 @@ def main(args):
 
 def sendudp(data, destip, destport):
     # start a new connection udp connection
-    connection = socket.socket(socket.AF_INET,     # Internet
-                               socket.SOCK_DGRAM)  # UDP
+    # connection = socket.socket(socket.AF_INET,     # Internet
+                            #    socket.SOCK_DGRAM)  # UDP
 
     # send udp datagram
-    res = connection.sendto(data.encode(), (destip, destport))
+    # res = connection.sendto(data.encode(), (destip, destport))
 
     # close udp connection
-    connection.close()
-
+    # connection.close()
+    print(data)
+    print("\n")
     # check if all bytes in resultstr were sent
-    if res != data.encode().__len__():
-        logging.error("Sent bytes do not match - expected {0} : got {1}".format(data.__len__(), res))
-        logging.critical("Packet-Payload {0}".format(data))
-        sys.exit(-1)
+    # if res != data.encode().__len__():
+    #     logging.error("Sent bytes do not match - expected {0} : got {1}".format(data.__len__(), res))
+    #     logging.critical("Packet-Payload {0}".format(data))
+    #     sys.exit(-1)
 
 # _______________________________________________________________________________________
 
