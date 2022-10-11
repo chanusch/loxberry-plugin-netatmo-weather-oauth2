@@ -35,8 +35,10 @@ our $languagefileplugin;
 our $cache;
 our $savedata;
 our $MSselectlist;
-our $username;
-our $password;
+our $clientid;
+our $clientsecret;
+our $refreshtoken;
+our $deviceid;
 our $miniserver;
 our $msudpport;
 our $enabled;
@@ -70,11 +72,17 @@ foreach (split(/&/,$ENV{"QUERY_STRING"}))
 # ---------------------------------------
 # Set parameters coming in - GET over POST
 # ---------------------------------------
-if ( !$query{'username'} )   { if ( param('username')  ) { $username = quotemeta(param('username'));         } 
-else { $username = $username;  } } else { $username = quotemeta($query{'username'});   }
+if ( !$query{'clientid'} )   { if ( param('clientid')  ) { $clientid = quotemeta(param('clientid'));         } 
+else { $clientid = $clientid;  } } else { $clientid = quotemeta($query{'clientid'});   }
 
-if ( !$query{'password'} )   { if ( param('password')  ) { $password = quotemeta(param('password'));         } 
-else { $password = $password;  } } else { $password = quotemeta($query{'password'});   }
+if ( !$query{'clientsecret'} )   { if ( param('clientsecret')  ) { $clientsecret = quotemeta(param('clientsecret'));         } 
+else { $clientsecret = $clientsecret;  } } else { $clientsecret = quotemeta($query{'clientsecret'});   }
+
+if ( !$query{'refreshtoken'} )   { if ( param('refreshtoken')  ) { $refreshtoken = quotemeta(param('refreshtoken'));         } 
+else { $refreshtoken = $refreshtoken;  } } else { $refreshtoken = quotemeta($query{'refreshtoken'});   }
+
+if ( !$query{'deviceid'} )   { if ( param('deviceid')  ) { $deviceid = quotemeta(param('deviceid'));         } 
+else { $deviceid = $deviceid;  } } else { $deviceid = quotemeta($query{'deviceid'});   }	
 
 if ( !$query{'miniserver'} )   { if ( param('miniserver')  ) { $miniserver = quotemeta(param('miniserver'));         } 
 else { $miniserver = $miniserver;  } } else { $miniserver = quotemeta($query{'miniserver'});   }
@@ -105,12 +113,11 @@ if (param('savedata')) {
 	if ($enabled ne 1) { $enabled = 0 }
 
 	if ($localtime ne 1) { $localtime = 0 }
-	
-	$username = encode_entities($username);
-	print STDERR "$username\n";
 
-	$conf->param('NETATMO.USERNAME', unquotemeta($username));
-	$conf->param('NETATMO.PASSWORD', unquotemeta($password));
+	$conf->param('NETATMO.DEVICEID', unquotemeta($deviceid));
+	$conf->param('NETATMO.CLIENTID', unquotemeta($clientid));
+	$conf->param('NETATMO.CLIENTSECRET', unquotemeta($clientsecret));
+	$conf->param('NETATMO.REFRESHTOKEN', unquotemeta($refreshtoken));
 	$conf->param('NETATMO.MINISERVER', unquotemeta("MINISERVER$miniserver"));
 	$conf->param('NETATMO.UDPPORT', unquotemeta($msudpport));
 	$conf->param('NETATMO.ENABLED', unquotemeta($enabled));
@@ -124,8 +131,10 @@ if (param('savedata')) {
 # Parse config file
 # ---------------------------------------
 $conf = new Config::Simple("$home/config/plugins/$psubfolder/netatmo.cfg");
-$username = encode_entities($conf->param('NETATMO.USERNAME'));
-$password = encode_entities($conf->param('NETATMO.PASSWORD'));
+$deviceid = encode_entities($conf->param('NETATMO.DEVICEID'));
+$clientid = encode_entities($conf->param('NETATMO.CLIENTID'));
+$clientsecret = encode_entities($conf->param('NETATMO.CLIENTSECRET'));
+$refreshtoken = encode_entities($conf->param('NETATMO.REFRESHTOKEN'));
 $miniserver = encode_entities($conf->param('NETATMO.MINISERVER'));
 $msudpport = encode_entities($conf->param('NETATMO.UDPPORT'));
 $enabled = encode_entities($conf->param('NETATMO.ENABLED'));

@@ -10,6 +10,7 @@ import requests
 from lxml import html
 import urllib.parse
 import logging
+import pickle
 
 
 def main(args):
@@ -31,12 +32,11 @@ def main(args):
 
     pluginconfig = configparser.ConfigParser()
     pluginconfig.read(args.configfile)
-    username = pluginconfig.get('NETATMO', 'USER_EMAIL')
-    password = pluginconfig.get('NETATMO', 'PASSWORD')
-    client_id = pluginconfig.get('NETATMO', 'CLIENT_ID')
-    client_secret = pluginconfig.get('NETATMO', 'CLIENT_SECRET')
+    client_id = pluginconfig.get('NETATMO', 'CLIENTID')
+    client_secret = pluginconfig.get('NETATMO', 'CLIENTSECRET')
+    refresh_token = pluginconfig.get('NETATMO', 'REFRESHTOKEN')
     enabled = pluginconfig.get('NETATMO', 'ENABLED')
-    device_id=pluginconfig.get('NETATMO', 'DEVICE_ID')
+    device_id=pluginconfig.get('NETATMO', 'DEVICEID')
     localtime = pluginconfig.get('NETATMO', 'ENABLED')
     miniservername = pluginconfig.get('NETATMO', 'MINISERVER')
     virtualUDPPort = int(pluginconfig.get('NETATMO', 'UDPPORT'))
@@ -105,19 +105,17 @@ def main(args):
 
     """
     fetch token with client credentials
-    """
+    """ 
     url = "https://api.netatmo.com/oauth2/token"
     payload = {
        "client_id" : client_id,
        "client_secret" : client_secret,
-       "grant_type": "password",
-       "username" : username,
-       "password" : password
+       "grant_type": "refresh_token",
+       "refresh_token" : refresh_token
     }
 
     req = session.post(url, payload,
      headers={'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, json = payload)
-
     if req.status_code != 200:
         logging.error("Unable to contact https://api.netatmo.com/oauth2/token")
         logging.critical("Error: {0}".format(req.status_code))
@@ -127,7 +125,7 @@ def main(args):
 
     csrf = json.loads(req.text)
     access_token = csrf["access_token"]
-    # refresh_token = csrf["refresh_token"] not sure if needed
+    refresh_token = csrf["refresh_token"]
 
     header = { "accept": "application/json" , "Authorization" : "Bearer " + access_token}
 
@@ -307,28 +305,28 @@ def main(args):
 
 def sendudp(data, destip, destport):
     # start a new connection udp connection
-    # connection = socket.socket(socket.AF_INET,     # Internet
-                            #    socket.SOCK_DGRAM)  # UDP
+    connection = socket.socket(socket.AF_INET,     # Internet
+                               socket.SOCK_DGRAM)  # UDP
 
     # send udp datagram
-    # res = connection.sendto(data.encode(), (destip, destport))
+    res = connection.sendto(data.encode(), (destip, destport))
 
     # close udp connection
-    # connection.close()
+    connection.close()
     print(data)
     print("\n")
     # check if all bytes in resultstr were sent
-    # if res != data.encode().__len__():
-    #     logging.error("Sent bytes do not match - expected {0} : got {1}".format(data.__len__(), res))
-    #     logging.critical("Packet-Payload {0}".format(data))
-    #     sys.exit(-1)
+    if res != data.encode().__len__():
+        logging.error("Sent bytes do not match - expected {0} : got {1}".format(data.__len__(), res))
+        logging.critical("Packet-Payload {0}".format(data))
+        sys.exit(-1)
 
 # _______________________________________________________________________________________
 
 
 class Config:
     __loxberry = {
-        "LBSCONFIG": os.getenv("LBSCONFIG", os.getcwd()),
+        "LBSCONFIG": os.getenv("LBSCONFIG", os.getcwd())
     }
 
     @staticmethod
